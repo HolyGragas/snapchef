@@ -117,7 +117,13 @@ $("form").addEventListener("submit", async (e) => {
   $("results").hidden = true;
 
   try {
-    const res = await fetch("/api/recipes", { method: "POST", body: data });
+    const code = $("access-code").value.trim();
+    localStorage.setItem("snapchef-access-code", code);
+    const res = await fetch("/api/recipes", {
+      method: "POST",
+      body: data,
+      headers: code ? { "X-Access-Code": code } : {},
+    });
     const body = await res.json().catch(() => ({ error: "The server sent an unexpected answer." }));
     if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
     renderResults(body);
@@ -186,5 +192,9 @@ function renderResults({ detected_ingredients = [], recipes = [], message = "" }
 // ---------- API key check ----------
 fetch("/api/health")
   .then((r) => r.json())
-  .then((h) => { $("key-warning").hidden = h.api_key_configured; })
+  .then((h) => {
+    $("key-warning").hidden = h.api_key_configured;
+    $("access-section").hidden = !h.access_code_required;
+    $("access-code").value = localStorage.getItem("snapchef-access-code") || "";
+  })
   .catch(() => {});

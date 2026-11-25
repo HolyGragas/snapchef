@@ -1,0 +1,17 @@
+# Render Blueprint: lets Render deploy SnapChef from this repo in a few clicks.
+# Secrets marked "sync: false" are typed in on Render's dashboard, never stored here.
+services:
+  - type: web
+    name: snapchef
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: APP_ACCESS_CODE
+        sync: false
+      - key: RATE_LIMIT_PER_HOUR
+        value: "10"
+      - key: MAX_REQUESTS_PER_DAY
+        value: "100"

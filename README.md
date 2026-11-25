@@ -33,6 +33,23 @@ You need **Docker Desktop** and an **Anthropic API key**
 
 Stop it with `docker compose down`. See the logs with `docker compose logs -f`.
 
+## Deploy online (Render, free)
+
+1. Sign in at https://render.com with GitHub and allow access to the `snapchef` repo.
+2. **New → Blueprint**, pick `snapchef`. Render reads `render.yaml`.
+3. Fill in the secrets it asks for:
+   - `ANTHROPIC_API_KEY`: your key
+   - `APP_ACCESS_CODE`: a code you give to people you demo to (leave empty for an open app)
+4. Click **Apply**. After a few minutes the app is live at `https://snapchef-xxxx.onrender.com`.
+
+Every push to `main` redeploys automatically. On the free plan the app sleeps after
+15 minutes without visitors and takes about a minute to wake up, so open it shortly
+before a demo.
+
+**Protecting your API budget:** the app limits each visitor to 10 requests per hour and
+the whole app to 100 per day (change with `RATE_LIMIT_PER_HOUR` / `MAX_REQUESTS_PER_DAY`).
+Also set a monthly spend limit in the Anthropic Console (Settings → Limits).
+
 ## How it works
 
 ```

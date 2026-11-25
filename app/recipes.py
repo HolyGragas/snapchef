@@ -134,7 +134,7 @@ async def suggest_recipes(ingredients: str, utensils: list[str], notes: str,
             fallbacks="default",
         )
     except anthropic.AuthenticationError:
-        raise RecipeError("The Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY in your .env file.", 500)
+        raise RecipeError("The Anthropic API key is missing or invalid. Check the ANTHROPIC_API_KEY setting (.env file locally, environment variables when hosted).", 500)
     except anthropic.PermissionDeniedError:
         raise RecipeError("Your Anthropic API key doesn't have access to this model.", 500)
     except anthropic.RateLimitError:
