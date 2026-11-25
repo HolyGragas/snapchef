@@ -1,8 +1,8 @@
 """Demo mode: suggests recipes from a built-in collection, no API key needed.
 
-Used automatically when ANTHROPIC_API_KEY is not set. Matches the typed
+Used automatically when GEMINI_API_KEY is not set. Matches the typed
 ingredients and selected utensils against the recipes below and returns the
-same JSON shape as the Claude version, so the page works the same way.
+same JSON shape as the AI version, so the page works the same way.
 """
 
 # Always assumed to be in the kitchen (matched against ingredient keywords)

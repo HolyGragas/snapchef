@@ -1,11 +1,12 @@
-"""Talks to Claude: turns ingredients, utensils and photos into recipes."""
+"""Talks to Google Gemini: turns ingredients, utensils and photos into recipes."""
 
-import base64
 import json
+import os
 
-import anthropic
+from google import genai
+from google.genai import errors, types
 
-MODEL = "claude-opus-5-5"
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 SYSTEM_PROMPT = """You are SnapChef, a friendly home-cooking assistant.
 
@@ -24,7 +25,7 @@ Rules:
 - Only use the utensils/appliances the user selected (if they selected none,
   assume a basic stovetop kitchen: pan, pot, knife, cutting board).
 - Respect the user's extra notes (diet, allergies, time, servings).
-- Steps must be clear, numbered in order, and beginner-friendly.
+- Steps must be clear, in order, and beginner-friendly.
 - Write all text in the same language the user wrote in (English if unclear).
 - If nothing edible was given, return an empty `recipes` list and explain why
   in `message`."""
@@ -83,28 +84,19 @@ class RecipeError(Exception):
         self.status = status
 
 
-_client: anthropic.AsyncAnthropic | None = None
+_client: genai.Client | None = None
 
 
-def _get_client() -> anthropic.AsyncAnthropic:
+def _get_client() -> genai.Client:
     global _client
     if _client is None:
-        _client = anthropic.AsyncAnthropic()  # reads ANTHROPIC_API_KEY
+        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     return _client
 
 
-def _build_user_content(ingredients: str, utensils: list[str], notes: str,
-                        photos: list[tuple[str, bytes]]) -> list[dict]:
-    content: list[dict] = []
-    for media_type, data in photos:
-        content.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": media_type,
-                "data": base64.standard_b64encode(data).decode("utf-8"),
-            },
-        })
+def _build_contents(ingredients: str, utensils: list[str], notes: str,
+                    photos: list[tuple[str, bytes]]) -> list:
+    contents: list = [types.Part.from_bytes(data=data, mime_type=media_type) for media_type, data in photos]
 
     lines = []
     if photos:
@@ -113,46 +105,48 @@ def _build_user_content(ingredients: str, utensils: list[str], notes: str,
     lines.append(f"Utensils / appliances I can use: {', '.join(utensils) if utensils else '(not specified)'}")
     if notes.strip():
         lines.append(f"Extra notes: {notes.strip()}")
-    content.append({"type": "text", "text": "\n".join(lines)})
-    return content
+    contents.append("\n".join(lines))
+    return contents
 
 
 async def suggest_recipes(ingredients: str, utensils: list[str], notes: str,
                           photos: list[tuple[str, bytes]]) -> dict:
     try:
-        response = await _get_client().beta.messages.create(
+        response = await _get_client().aio.models.generate_content(
             model=MODEL,
-            max_tokens=16000,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": _build_user_content(ingredients, utensils, notes, photos)}],
-            output_config={
-                "effort": "medium",
-                "format": {"type": "json_schema", "schema": RECIPE_SCHEMA},
-            },
-            # If Claude's safety filters decline, the API retries on a fallback model.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
+            contents=_build_contents(ingredients, utensils, notes, photos),
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_json_schema=RECIPE_SCHEMA,
+            ),
         )
-    except anthropic.AuthenticationError:
-        raise RecipeError("The Anthropic API key is missing or invalid. Check the ANTHROPIC_API_KEY setting (.env file locally, environment variables when hosted).", 500)
-    except anthropic.PermissionDeniedError:
-        raise RecipeError("Your Anthropic API key doesn't have access to this model.", 500)
-    except anthropic.RateLimitError:
-        raise RecipeError("Too many requests right now - wait a minute and try again.", 429)
-    except anthropic.BadRequestError as e:
+    except errors.ClientError as e:
+        text = f"{e.status} {e.message}".lower()
+        if e.code in (401, 403) or "api key" in text or "api_key" in text:
+            raise RecipeError("The Gemini API key is missing or invalid. Check the GEMINI_API_KEY setting "
+                              "(.env file locally, environment variables when hosted).", 500)
+        if e.code == 429:
+            raise RecipeError("The free Gemini limit was reached. Wait a minute and try again.", 429)
+        if e.code == 404:
+            raise RecipeError(f"The Gemini model '{MODEL}' wasn't found. Set GEMINI_MODEL to a current model.", 500)
         raise RecipeError(f"The request was rejected: {e.message}", 400)
-    except anthropic.APIStatusError as e:
-        raise RecipeError(f"Claude API error ({e.status_code}). Please try again.", 502)
-    except anthropic.APIConnectionError:
-        raise RecipeError("Couldn't reach the Claude API. Check your internet connection.", 503)
+    except errors.ServerError:
+        raise RecipeError("Gemini is having trouble right now. Please try again.", 502)
+    except errors.APIError as e:
+        raise RecipeError(f"Gemini API error ({e.code}). Please try again.", 502)
+    except OSError:
+        raise RecipeError("Couldn't reach the Gemini API. Check your internet connection.", 503)
 
-    if response.stop_reason == "refusal":
+    if response.prompt_feedback and response.prompt_feedback.block_reason:
         raise RecipeError("Sorry, SnapChef can't help with that request.", 422)
-    if response.stop_reason == "max_tokens":
+    finish = response.candidates[0].finish_reason if response.candidates else None
+    if finish == types.FinishReason.MAX_TOKENS:
         raise RecipeError("The answer was too long and got cut off. Try with fewer ingredients or photos.", 502)
+    if not response.text:
+        raise RecipeError("Sorry, SnapChef can't help with that request.", 422)
 
-    text = "".join(block.text for block in response.content if block.type == "text")
     try:
-        return json.loads(text)
+        return json.loads(response.text)
     except json.JSONDecodeError:
-        raise RecipeError("Claude returned an unexpected answer. Please try again.", 502)
+        raise RecipeError("The AI returned an unexpected answer. Please try again.", 502)

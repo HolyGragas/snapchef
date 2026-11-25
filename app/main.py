@@ -45,8 +45,8 @@ def client_ip(request: Request) -> str:
 async def health():
     return {
         "ok": True,
-        "mode": "ai" if os.getenv("ANTHROPIC_API_KEY") else "demo",
-        "api_key_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "mode": "ai" if os.getenv("GEMINI_API_KEY") else "demo",
+        "api_key_configured": bool(os.getenv("GEMINI_API_KEY")),
         "access_code_required": bool(ACCESS_CODE),
     }
 
@@ -78,7 +78,7 @@ async def recipes(
             return error(f"'{photo.filename}' is larger than 5 MB.", 400)
         photo_data.append((photo.content_type, data))
 
-    if not os.getenv("ANTHROPIC_API_KEY"):
+    if not os.getenv("GEMINI_API_KEY"):
         # Demo mode: built-in recipes, no API key or cost
         return suggest_demo_recipes(ingredients[:2000], utensils[:30], has_photos=bool(photo_data))
 
