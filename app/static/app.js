@@ -193,7 +193,7 @@ function renderResults({ detected_ingredients = [], recipes = [], message = "" }
 fetch("/api/health")
   .then((r) => r.json())
   .then((h) => {
-    $("key-warning").hidden = h.api_key_configured;
+    $("key-warning").hidden = h.mode !== "demo";
     $("access-section").hidden = !h.access_code_required;
     $("access-code").value = localStorage.getItem("snapchef-access-code") || "";
   })

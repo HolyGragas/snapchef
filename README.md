@@ -10,14 +10,21 @@ Give SnapChef:
 …and it suggests 3 recipes you can cook right now, with quantities, step-by-step
 instructions, and a clear "you need this" label on anything you're missing.
 
-The recipes and the photo recognition come from **Claude** (Anthropic's AI model, `claude-opus-5-5`).
+SnapChef has two modes:
+
+| Mode | When | What you get |
+|---|---|---|
+| **AI mode** | `ANTHROPIC_API_KEY` is set | Claude (`claude-opus-5-5`) recognizes ingredients in photos and writes recipes for anything you have |
+| **Demo mode** | no API key | Free, no account needed: recipes from a built-in collection of 24, matched to your typed ingredients and utensils (photos aren't analyzed) |
+
+The app switches automatically, so you can run it right away without a key.
 
 ## Run it with Docker
 
-You need **Docker Desktop** and an **Anthropic API key**
-(create one at https://console.anthropic.com/settings/keys; the API is paid per use).
+You need **Docker Desktop**. An **Anthropic API key** is optional: without one the app runs in demo mode
+(create a key at https://console.anthropic.com/settings/keys; the API is paid per use).
 
-1. Copy the example settings file and add your key:
+1. *(Optional, for AI mode)* Copy the example settings file and add your key:
    ```powershell
    Copy-Item .env.example .env
    notepad .env

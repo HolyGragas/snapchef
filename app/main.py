@@ -8,6 +8,7 @@ from fastapi import FastAPI, File, Form, Header, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .demo import suggest_demo_recipes
 from .limits import UsageLimiter
 from .recipes import RecipeError, suggest_recipes
 
@@ -44,6 +45,7 @@ def client_ip(request: Request) -> str:
 async def health():
     return {
         "ok": True,
+        "mode": "ai" if os.getenv("ANTHROPIC_API_KEY") else "demo",
         "api_key_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
         "access_code_required": bool(ACCESS_CODE),
     }
@@ -77,7 +79,8 @@ async def recipes(
         photo_data.append((photo.content_type, data))
 
     if not os.getenv("ANTHROPIC_API_KEY"):
-        return error("No Anthropic API key is set. Add ANTHROPIC_API_KEY to your .env file and restart.", 500)
+        # Demo mode: built-in recipes, no API key or cost
+        return suggest_demo_recipes(ingredients[:2000], utensils[:30], has_photos=bool(photo_data))
 
     limit_message = limiter.check(client_ip(request))
     if limit_message:
