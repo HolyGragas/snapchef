@@ -363,10 +363,8 @@ def suggest_demo_recipes(ingredients: str, utensils: list[str], has_photos: bool
         return {"detected_ingredients": [], "recipes": [],
                 "message": "Demo mode can't look at photos. Type your ingredients to get recipes." }
 
-    candidates = []
+    scored = []
     for recipe in RECIPES:
-        if not set(recipe["utensils"]) <= available_utensils:
-            continue
         ings, matched, missing, main_count = [], 0, 0, 0
         for i in recipe["ingredients"]:
             from_user = _have(i["keywords"], user_items)
@@ -377,18 +375,32 @@ def suggest_demo_recipes(ingredients: str, utensils: list[str], has_photos: bool
                 matched += from_user
                 missing += not from_user
             ings.append({"name": i["name"], "quantity": i["quantity"], "have": from_user or staple})
-        # Need at least 2 of the main ingredients (or all of them for tiny recipes)
-        if matched < min(2, main_count) or missing > 3:
-            continue
-        candidates.append((missing, -matched, recipe, ings))
+        utensils_ok = set(recipe["utensils"]) <= available_utensils
+        scored.append({"recipe": recipe, "ings": ings, "matched": matched, "missing": missing,
+                       "main_count": main_count, "utensils_ok": utensils_ok})
 
-    candidates.sort(key=lambda c: (c[0], c[1]))
-    recipes = [{**{k: v for k, v in r.items() if k != "ingredients"}, "ingredients": ings}
-               for _, _, r, ings in candidates[:3]]
+    # 1st choice: good matches (at least 2 main ingredients, at most 3 missing) with the chosen utensils
+    good = [s for s in scored if s["utensils_ok"]
+            and s["matched"] >= min(2, s["main_count"]) and s["missing"] <= 3]
+    good.sort(key=lambda s: (s["missing"], -s["matched"]))
+    picked, close_only = good[:3], False
+
+    # Otherwise: the closest recipes that use at least one of the ingredients
+    if not picked:
+        close = [s for s in scored if s["matched"] >= 1]
+        close.sort(key=lambda s: (-s["matched"], not s["utensils_ok"], s["missing"]))
+        picked, close_only = close[:3], True
+
+    recipes = [{**{k: v for k, v in s["recipe"].items() if k != "ingredients"}, "ingredients": s["ings"]}
+               for s in picked]
 
     if not recipes:
-        message = ("Demo mode couldn't find a recipe for those ingredients and utensils. "
-                   "Try adding a few more ingredients or selecting more utensils." + photo_note)
+        message = ("Demo mode doesn't know those ingredients. It has a small built-in collection, so try "
+                   "common ones in English like eggs, pasta, rice, chicken, potatoes, tomatoes, cheese, "
+                   "banana or milk." + photo_note)
+    elif close_only:
+        message = ("No perfect match in demo mode, so here are the closest recipes. Items marked "
+                   "\"you need this\" are missing." + photo_note)
     else:
         message = (f"Demo mode: {len(recipes)} recipe(s) from SnapChef's built-in collection "
                    "that match what you have." + photo_note)
