@@ -1,0 +1,9 @@
+services:
+  snapchef:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false   # the app still starts without it and shows a warning
+    restart: unless-stopped
